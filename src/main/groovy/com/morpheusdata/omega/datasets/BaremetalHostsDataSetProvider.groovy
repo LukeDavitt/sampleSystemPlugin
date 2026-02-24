@@ -130,8 +130,4 @@ class BaremetalHostsDataSetProvider extends AbstractDatasetProvider<ComputeServe
     /**
      * {@inheritDoc}
      */
-    @Override
-    boolean isPlugin() {
-        return true
-    }
 }

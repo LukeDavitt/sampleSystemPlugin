@@ -18,6 +18,7 @@ package com.morpheusdata.omega
 import com.morpheusdata.omega.datasets.BaremetalHostsDataSetProvider
 import com.morpheusdata.omega.datasets.BaremetalResourcePoolDataSetProvider
 import com.morpheusdata.omega.datasets.CollectionDatasetProvider
+import com.morpheusdata.omega.system.DummySystemProvider
 import com.morpheusdata.omega.addon.AddonPackageTestClusterTabProvider
 import com.morpheusdata.omega.addon.AddonPackageTypeProvider
 import com.morpheusdata.omega.baremetal.BaremetalCloudProvider
@@ -66,6 +67,7 @@ class MorpheusOmegaTestPlugin extends Plugin {
 		this.registerProvider(new CollectionDatasetProvider(this, this.morpheus))
 		this.registerProvider(new BaremetalHostsDataSetProvider(this,this.morpheus))
 		this.registerProvider(new BaremetalResourcePoolDataSetProvider(this,this.morpheus))
+		this.registerProvider(new DummySystemProvider(this, this.morpheus))
 
 	}
 
