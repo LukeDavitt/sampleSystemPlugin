@@ -36,7 +36,30 @@ class DummySystemProvider implements SystemProvider {
 	Icon getIcon() { return null }
 
 	@Override
-	Collection<SystemComponentType> getSystemComponentTypes() { return [] }
+	Collection<SystemComponentType> getSystemComponentTypes() {
+		def computeNode = new SystemComponentType()
+		computeNode.code = 'dummy-compute-node'
+		computeNode.name = 'Compute Node'
+		computeNode.description = 'A compute node in the system'
+		computeNode.category = 'compute'
+		computeNode.active = true
+
+		def storageController = new SystemComponentType()
+		storageController.code = 'dummy-storage-controller'
+		storageController.name = 'Storage Controller'
+		storageController.description = 'A storage controller in the system'
+		storageController.category = 'storage'
+		storageController.active = true
+
+		def networkSwitch = new SystemComponentType()
+		networkSwitch.code = 'dummy-network-switch'
+		networkSwitch.name = 'Network Switch'
+		networkSwitch.description = 'A network switch in the system'
+		networkSwitch.category = 'network'
+		networkSwitch.active = true
+
+		return [computeNode, storageController, networkSwitch]
+	}
 
 	@Override
 	Collection<SystemType> getSystemTypes() {
@@ -60,7 +83,7 @@ class DummySystemProvider implements SystemProvider {
 		layout.version = '1.0'
 		layout.enabled = true
 		layout.systemType = systemType
-		layout.components = []
+		layout.components = getSystemComponentTypes()
 		return [layout]
 	}
 }
