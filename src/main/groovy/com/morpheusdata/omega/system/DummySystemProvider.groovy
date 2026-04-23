@@ -130,6 +130,7 @@ class DummySystemProvider implements SystemProvider {
 				return ServiceResponse.error("No unlinked component found for type '${componentType.code}' on system '${system.name}'")
 			}
 
+			component.system = system
 			component.refType = refType
 			component.refId = resourceId.toString()
 			component.externalId = resourceId.toString()
@@ -163,6 +164,7 @@ class DummySystemProvider implements SystemProvider {
 				return ServiceResponse.error("No component found for type '${componentType.code}' on system '${system.name}'")
 			}
 
+			component.system = system
 			component.refType = refType
 			component.refId = resourceId.toString()
 			component.externalId = resourceId.toString()
