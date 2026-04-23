@@ -1,6 +1,7 @@
 package com.morpheusdata.omega.storageserver
 
 
+import com.morpheusdata.core.data.DataQuery
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.Plugin
 import com.morpheusdata.core.providers.StorageProvider
@@ -10,14 +11,17 @@ import com.morpheusdata.model.OptionType;
 import com.morpheusdata.model.StorageGroup
 import com.morpheusdata.model.StorageServer
 import com.morpheusdata.model.StorageServerType
+import com.morpheusdata.model.UpdateDefinition
+import com.morpheusdata.model.UpdateOperation
 import com.morpheusdata.model.StorageVolume
 import com.morpheusdata.model.StorageVolumeType
 import com.morpheusdata.omega.logging.LogWrapper
 import com.morpheusdata.response.ServiceResponse
 import com.morpheusdata.views.Renderer
 import groovy.json.JsonOutput
+import java.util.Date
 
-class StorageServerProvider implements StorageProvider, StorageProviderVolumes{
+class StorageServerProvider implements StorageProvider, StorageProviderVolumes, StorageProvider.StorageUpdateFacet {
 
 	public static final String STORAGE_PROVIDER_CODE = 'omega.sstp'
 
@@ -109,6 +113,7 @@ class StorageServerProvider implements StorageProvider, StorageProviderVolumes{
 	 */
 	@Override
 	ServiceResponse initializeStorageServer(StorageServer storageServer, Map opts) {
+		seedUpdateDefinitions(storageServer)
 		return ServiceResponse.success()
 	}
 
@@ -121,6 +126,7 @@ class StorageServerProvider implements StorageProvider, StorageProviderVolumes{
 	 */
 	@Override
 	ServiceResponse refreshStorageServer(StorageServer storageServer, Map opts) {
+		seedUpdateDefinitions(storageServer)
 		return ServiceResponse.success()
 	}
 
@@ -367,5 +373,73 @@ class StorageServerProvider implements StorageProvider, StorageProviderVolumes{
 
 	Renderer<?> getRenderer() {
 		return null;
+	}
+
+	@Override
+	ServiceResponse<UpdateOperation> validateUpdate(StorageServer storageServer, UpdateDefinition updateDefinition) {
+		return ServiceResponse.success(new UpdateOperation())
+	}
+
+	@Override
+	ServiceResponse<UpdateOperation> executeUpdate(StorageServer storageServer, UpdateDefinition updateDefinition) {
+		return ServiceResponse.success(new UpdateOperation())
+	}
+
+	@Override
+	ServiceResponse<UpdateOperation> refreshUpdate(StorageServer storageServer, UpdateOperation updateOperation) {
+		return ServiceResponse.success(new UpdateOperation())
+	}
+
+	@Override
+	ServiceResponse<UpdateOperation> postUpdate(StorageServer storageServer, UpdateDefinition updateDefinition) {
+		return ServiceResponse.success(new UpdateOperation())
+	}
+
+	@Override
+	ServiceResponse<UpdateOperation> rollbackUpdate(StorageServer storageServer, UpdateDefinition updateDefinition) {
+		return ServiceResponse.success(new UpdateOperation())
+	}
+
+	private void seedUpdateDefinitions(StorageServer storageServer) {
+		if (!storageServer?.type?.id) {
+			log.warn("seedUpdateDefinitions: storage server has no type, skipping")
+			return
+		}
+		Long typeId = storageServer.type.id
+		def defs = [
+			[
+				code: 'omega.storage.update.patch',
+				name: 'Omega Storage Demo Update',
+				version: '1.0.1',
+				refType: 'StorageServerType',
+				refId: typeId,
+				supportsRollback: false,
+				requiresReboot: false,
+				requiresRestart: false,
+				requiresMaintenanceMode: false,
+				isPlugin: true,
+				severity: 'normal',
+				type: 'enhancement',
+				description: 'Harmless demo update for storage server testing.',
+				zeroDowntime: true
+			]
+		]
+		defs.each { d ->
+			def existing = morpheusContext.services.updateDefinition.find(new DataQuery().withFilter('code', d.code))
+			if (existing) {
+				def needsSave = false
+				if (existing.refId != d.refId) { existing.refId = d.refId; needsSave = true }
+				if (existing.enabled != true) { existing.enabled = true; needsSave = true }
+				if (needsSave) morpheusContext.services.updateDefinition.save(existing)
+			} else {
+				morpheusContext.services.updateDefinition.create(new UpdateDefinition(
+					code: d.code, name: d.name, version: d.version, refType: d.refType,
+					refId: d.refId, supportsRollback: d.supportsRollback, requiresReboot: d.requiresReboot,
+					requiresRestart: d.requiresRestart, requiresMaintenanceMode: d.requiresMaintenanceMode,
+					isPlugin: d.isPlugin, severity: d.severity, type: d.type, description: d.description,
+					zeroDowntime: d.zeroDowntime, enabled: true, updateReleaseDate: new Date()
+				))
+			}
+		}
 	}
 }
