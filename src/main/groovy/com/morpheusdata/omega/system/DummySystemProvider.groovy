@@ -69,6 +69,7 @@ class DummySystemProvider implements SystemProvider {
 		networkSwitch.description = 'A network switch in the system'
 		networkSwitch.category = 'network'
 		networkSwitch.active = true
+		networkSwitch.modelType = ComputeServer
 
 		return [computeNode, storageController, networkSwitch]
 	}
