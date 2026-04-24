@@ -382,6 +382,13 @@ class StorageServerProvider implements StorageProvider, StorageProviderVolumes, 
 
 	@Override
 	ServiceResponse<UpdateOperation> executeUpdate(StorageServer storageServer, UpdateDefinition updateDefinition) {
+		if (!storageServer?.id) {
+			return ServiceResponse.error('Storage server not found for update execution')
+		}
+
+		def appliedName = buildUpdatedStorageServerName(storageServer, updateDefinition)
+		storageServer.name = appliedName
+		morpheusContext.services.storageServer.save(storageServer).blockingGet()
 		return ServiceResponse.success(new UpdateOperation())
 	}
 
@@ -398,6 +405,11 @@ class StorageServerProvider implements StorageProvider, StorageProviderVolumes, 
 	@Override
 	ServiceResponse<UpdateOperation> rollbackUpdate(StorageServer storageServer, UpdateDefinition updateDefinition) {
 		return ServiceResponse.success(new UpdateOperation())
+	}
+
+	private String buildUpdatedStorageServerName(StorageServer storageServer, UpdateDefinition updateDefinition) {
+		def updateLabel = updateDefinition?.name ?: 'Updated'
+		return "${updateLabel} - ${storageServer.id}"
 	}
 
 	private void seedUpdateDefinitions(StorageServer storageServer) {

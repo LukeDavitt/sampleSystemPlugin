@@ -24,6 +24,8 @@ import com.morpheusdata.model.ProvisionType
 import com.morpheusdata.model.ServicePlan
 import com.morpheusdata.model.Snapshot
 import com.morpheusdata.model.StorageVolumeType
+import com.morpheusdata.model.UpdateDefinition
+import com.morpheusdata.model.UpdateOperation
 import com.morpheusdata.model.VirtualImageType
 import com.morpheusdata.model.Workload
 import com.morpheusdata.model.provisioning.HostRequest
@@ -55,7 +57,7 @@ import groovy.util.logging.Slf4j
 class BaremetalProvisionProvider extends AbstractProvisionProvider
 		implements WorkloadProvisionProvider, ProvisionInstanceServers, ProvisionProvider.HypervisorConsoleFacet,
 				WorkloadProvisionProvider.ResizeV2Facet, HostProvisionProvider, HostProvisionProvider.ResizeV2Facet, HostProvisionProvider.finalizeHostFacet,  ProvisionProvider.SnapshotFacet,
-				ProvisionProvider.ConvertToManagedFacet,ResourceProvisionProvider {
+				ProvisionProvider.ConvertToManagedFacet, ResourceProvisionProvider, ProvisionProvider.ComputeUpdateFacet {
 	public static final String PROVISION_PROVIDER_CODE = 'omega.baremetal.provision'
 	public static final String ALLETRA_STORAGE_TYPE_CODE = 'hpealletraMPLUN'
 	public static final String CSI_VLAN_CODE = "omega.baremetal.csi.vlan"
@@ -676,6 +678,7 @@ class BaremetalProvisionProvider extends AbstractProvisionProvider
 		}
 		server.plan = context.services.servicePlan.find(new DataQuery().withFilter('code', 'omega.baremetal.any'))
 		context.services.computeServer.save(server)
+		seedUpdateDefinitions(server)
 
 		def netInterfaces = []
 		def numNics = Long.valueOf(server.configMap.numNics)
@@ -993,5 +996,73 @@ class BaremetalProvisionProvider extends AbstractProvisionProvider
 	@Override
 	ServiceResponse destroyInstance(Instance instance, Map opts) {
 		ServiceResponse.success(new ProvisionResponse())
+	}
+
+	private void seedUpdateDefinitions(ComputeServer server) {
+		if (!server?.computeServerType?.id) {
+			log.warn("seedUpdateDefinitions: server has no computeServerType, skipping")
+			return
+		}
+
+		Long typeId = server.computeServerType.id
+		def defs = [[
+			code: 'omega.baremetal.update.patch',
+			name: 'Omega Baremetal Patch Update',
+			version: '1.0.1',
+			refType: 'ComputeServerType',
+			refId: typeId,
+			supportsRollback: false,
+			requiresReboot: false,
+			requiresRestart: false,
+			requiresMaintenanceMode: false,
+			isPlugin: true,
+		]]
+
+		defs.each { d ->
+			def existing = context.services.updateDefinition.find(new DataQuery().withFilter('code', d.code))
+			if (!existing) {
+				context.services.updateDefinition.create(new UpdateDefinition(
+					code: d.code,
+					name: d.name,
+					version: d.version,
+					refType: d.refType,
+					refId: d.refId,
+					supportsRollback: d.supportsRollback,
+					requiresReboot: d.requiresReboot,
+					requiresRestart: d.requiresRestart,
+					requiresMaintenanceMode: d.requiresMaintenanceMode,
+					isPlugin: d.isPlugin,
+				))
+			}
+		}
+	}
+
+	@Override
+	ServiceResponse<UpdateOperation> validateUpdate(UpdateDefinition update, ComputeServer... computeServer) {
+		return ServiceResponse.success(new UpdateOperation())
+	}
+
+	@Override
+	ServiceResponse<UpdateOperation> executeUpdate(UpdateDefinition update, ComputeServer... computeServer) {
+		computeServer.each { server ->
+			server.name = update?.name ?: server.name
+			context.services.computeServer.save(server)
+		}
+		return ServiceResponse.success(new UpdateOperation())
+	}
+
+	@Override
+	ServiceResponse<UpdateOperation> refreshUpdate(UpdateOperation updateOperation, ComputeServer... computeServer) {
+		return ServiceResponse.success(updateOperation ?: new UpdateOperation())
+	}
+
+	@Override
+	ServiceResponse<UpdateOperation> postUpdate(UpdateDefinition update, ComputeServer... computeServer) {
+		return ServiceResponse.success(new UpdateOperation())
+	}
+
+	@Override
+	ServiceResponse<UpdateOperation> rollbackUpdate(UpdateDefinition update, ComputeServer... computeServer) {
+		return ServiceResponse.success(new UpdateOperation())
 	}
 }
