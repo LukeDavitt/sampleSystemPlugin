@@ -4,6 +4,7 @@ import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.Plugin
 import com.morpheusdata.core.providers.SystemProvider
 import com.morpheusdata.model.ComputeServer
+import com.morpheusdata.model.NetworkServer
 import com.morpheusdata.model.Icon
 import com.morpheusdata.model.StorageServer
 import com.morpheusdata.model.system.System
@@ -21,6 +22,7 @@ class DummySystemProvider implements SystemProvider {
 	// refType values written onto SystemComponent when linked to a real resource
 	static final String REF_TYPE_COMPUTE_SERVER = 'ComputeServer'
 	static final String REF_TYPE_STORAGE_SERVER = 'StorageServer'
+	static final String REF_TYPE_NETWORK_SERVER = 'NetworkServer'
 
 	Plugin plugin
 	MorpheusContext morpheusContext
@@ -69,7 +71,7 @@ class DummySystemProvider implements SystemProvider {
 		networkSwitch.description = 'A network switch in the system'
 		networkSwitch.category = 'network'
 		networkSwitch.active = true
-		networkSwitch.modelType = ComputeServer
+		networkSwitch.modelType = NetworkServer
 
 		return [computeNode, storageController, networkSwitch]
 	}
@@ -180,6 +182,7 @@ class DummySystemProvider implements SystemProvider {
 	private static String resolveRefType(SystemComponentType componentType) {
 		if (componentType.modelType == ComputeServer) return REF_TYPE_COMPUTE_SERVER
 		if (componentType.modelType == StorageServer) return REF_TYPE_STORAGE_SERVER
+		if (componentType.modelType == NetworkServer) return REF_TYPE_NETWORK_SERVER
 		return null
 	}
 }

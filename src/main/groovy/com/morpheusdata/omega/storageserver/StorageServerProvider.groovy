@@ -388,7 +388,7 @@ class StorageServerProvider implements StorageProvider, StorageProviderVolumes, 
 
 		def appliedName = buildUpdatedStorageServerName(storageServer, updateDefinition)
 		storageServer.name = appliedName
-		morpheusContext.services.storageServer.save(storageServer).blockingGet()
+		morpheusContext.services.storageServer.save(storageServer)
 		return ServiceResponse.success(new UpdateOperation())
 	}
 
