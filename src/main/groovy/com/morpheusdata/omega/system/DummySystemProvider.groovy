@@ -3,7 +3,9 @@ package com.morpheusdata.omega.system
 import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.Plugin
 import com.morpheusdata.core.providers.SystemProvider
+import com.morpheusdata.core.providers.ClusterProvider
 import com.morpheusdata.model.ComputeServer
+import com.morpheusdata.model.ComputeServerGroup
 import com.morpheusdata.model.NetworkServer
 import com.morpheusdata.model.Icon
 import com.morpheusdata.model.StorageServer
@@ -13,9 +15,13 @@ import com.morpheusdata.model.system.SystemComponentType
 import com.morpheusdata.model.system.SystemRequest
 import com.morpheusdata.model.system.SystemType
 import com.morpheusdata.model.system.SystemTypeLayout
+import com.morpheusdata.model.UpdateDefinition
+import com.morpheusdata.core.data.DataQuery
 import com.morpheusdata.response.ServiceResponse
+import groovy.util.logging.Slf4j
 
-class DummySystemProvider implements SystemProvider {
+@Slf4j
+class DummySystemProvider implements SystemProvider, ClusterProvider.ClusterUpdateFacet {
 	static final String SYSTEM_TYPE_CODE = 'dummy-type'
 	static final String SYSTEM_LAYOUT_CODE = 'dummy-type-default-layout'
 
@@ -23,6 +29,7 @@ class DummySystemProvider implements SystemProvider {
 	static final String REF_TYPE_COMPUTE_SERVER = 'ComputeServer'
 	static final String REF_TYPE_STORAGE_SERVER = 'StorageServer'
 	static final String REF_TYPE_NETWORK_SERVER = 'NetworkServer'
+	static final String REF_TYPE_CLUSTER = 'ComputeServerGroup'
 
 	Plugin plugin
 	MorpheusContext morpheusContext
@@ -73,7 +80,15 @@ class DummySystemProvider implements SystemProvider {
 		networkSwitch.active = true
 		networkSwitch.modelType = NetworkServer
 
-		return [computeNode, storageController, networkSwitch]
+		def clusterNode = new SystemComponentType()
+		clusterNode.code = 'dummy-cluster-node'
+		clusterNode.name = 'Cluster Node'
+		clusterNode.description = 'A cluster in the system'
+		clusterNode.category = 'compute'
+		clusterNode.active = true
+		clusterNode.modelType = ComputeServerGroup
+
+		return [computeNode, storageController, networkSwitch, clusterNode]
 	}
 
 	@Override
@@ -139,6 +154,11 @@ class DummySystemProvider implements SystemProvider {
 			component.externalId = resourceId.toString()
 			morpheusContext.async.system.component.save(component).blockingGet()
 
+			// Seed cluster update definitions when linking a cluster component
+			if (componentType.modelType == ComputeServerGroup) {
+				seedClusterUpdateDefinitions()
+			}
+
 			return ServiceResponse.success()
 		} catch (Exception e) {
 			return ServiceResponse.error("Failed to add system component '${componentType.code}': ${e.message}")
@@ -179,10 +199,89 @@ class DummySystemProvider implements SystemProvider {
 		}
 	}
 
+	// -- ClusterUpdateFacet implementation --
+
+	@Override
+	ServiceResponse validateUpdate(ComputeServerGroup target, UpdateDefinition update) {
+		log.info("validateUpdate called for cluster ${target.id} with update ${update.code}")
+		return ServiceResponse.success()
+	}
+
+	@Override
+	ServiceResponse executeUpdate(ComputeServerGroup target, UpdateDefinition update) {
+		log.info("executeUpdate called for cluster ${target.id} with update ${update.code}")
+		def newName = "${update.name ?: 'Updated'} - ${target.id}"
+		// Load the full object by ID to ensure all required fields are present before saving
+		def cluster = morpheusContext.services.cluster.get(target.id)
+		if (!cluster) {
+			log.error("Cluster not found for id ${target.id}")
+			return ServiceResponse.error("Cluster not found for id ${target.id}")
+		}
+		cluster.name = newName
+		morpheusContext.services.cluster.save(cluster)
+		log.info("Renamed cluster ${target.id} to '${newName}'")
+		return ServiceResponse.success()
+	}
+
+	@Override
+	ServiceResponse postUpdate(ComputeServerGroup target, UpdateDefinition update) {
+		log.info("postUpdate called for cluster ${target.id} with update ${update.code}")
+		return ServiceResponse.success()
+	}
+
+	@Override
+	ServiceResponse rollbackUpdate(ComputeServerGroup target, UpdateDefinition update) {
+		log.info("rollbackUpdate called for cluster ${target.id} with update ${update.code}")
+		return ServiceResponse.success()
+	}
+
+	/**
+	 * Seeds UpdateDefinition records for cluster types by code so the system-scoped
+	 * cluster update endpoints can resolve available updates without hardcoded ids.
+	 */
+	private void seedClusterUpdateDefinitions() {
+		def clusterTypeCodes = ['kubernetes-cluster']
+
+		clusterTypeCodes.each { typeCode ->
+			def clusterType = morpheusContext.services.cluster.type.find(
+				new DataQuery().withFilter('code', typeCode)
+			)
+			if (!clusterType) {
+				log.warn("seedClusterUpdateDefinitions: no ComputeServerGroupType found for code '${typeCode}', skipping")
+				return
+			}
+
+			def defCode = "omega.cluster.update.patch.${typeCode}"
+			def existing = morpheusContext.services.updateDefinition.find(new DataQuery().withFilter('code', defCode))
+			if (existing) {
+				def needsSave = false
+				if (existing.refId != clusterType.id) { existing.refId = clusterType.id; needsSave = true }
+				if (existing.enabled != true) { existing.enabled = true; needsSave = true }
+				if (needsSave) morpheusContext.services.updateDefinition.save(existing)
+			} else {
+				morpheusContext.services.updateDefinition.create(new UpdateDefinition(
+					code: defCode,
+					name: "Omega Cluster Demo Update (${typeCode})",
+					version: '1.0.1',
+					refType: 'ComputeServerGroupType',
+					refId: clusterType.id,
+					isPlugin: true,
+					enabled: true,
+					supportsRollback: false,
+					requiresReboot: false,
+					requiresRestart: false,
+					requiresMaintenanceMode: false,
+					updateReleaseDate: new Date()
+				))
+			}
+		}
+	}
+
 	private static String resolveRefType(SystemComponentType componentType) {
 		if (componentType.modelType == ComputeServer) return REF_TYPE_COMPUTE_SERVER
 		if (componentType.modelType == StorageServer) return REF_TYPE_STORAGE_SERVER
 		if (componentType.modelType == NetworkServer) return REF_TYPE_NETWORK_SERVER
+		if (componentType.modelType == ComputeServerGroup) return REF_TYPE_CLUSTER
 		return null
 	}
 }
