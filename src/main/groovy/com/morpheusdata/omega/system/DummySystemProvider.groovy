@@ -4,11 +4,13 @@ import com.morpheusdata.core.MorpheusContext
 import com.morpheusdata.core.Plugin
 import com.morpheusdata.core.providers.SystemProvider
 import com.morpheusdata.core.providers.ClusterProvider
+import com.morpheusdata.core.providers.ProvisionProvider
 import com.morpheusdata.model.ComputeServer
 import com.morpheusdata.model.ComputeServerGroup
 import com.morpheusdata.model.NetworkServer
 import com.morpheusdata.model.Icon
 import com.morpheusdata.model.StorageServer
+import com.morpheusdata.model.UpdateOperation
 import com.morpheusdata.model.system.System
 import com.morpheusdata.model.system.SystemComponent
 import com.morpheusdata.model.system.SystemComponentType
@@ -21,7 +23,7 @@ import com.morpheusdata.response.ServiceResponse
 import groovy.util.logging.Slf4j
 
 @Slf4j
-class DummySystemProvider implements SystemProvider, ClusterProvider.ClusterUpdateFacet {
+class DummySystemProvider implements SystemProvider, ClusterProvider.ClusterUpdateFacet, ProvisionProvider.ComputeUpdateFacet {
 	static final String SYSTEM_TYPE_CODE = 'dummy-type'
 	static final String SYSTEM_LAYOUT_CODE = 'dummy-type-default-layout'
 
@@ -159,6 +161,11 @@ class DummySystemProvider implements SystemProvider, ClusterProvider.ClusterUpda
 				seedClusterUpdateDefinitions()
 			}
 
+			// Seed compute server update definitions when linking a compute component
+			if (componentType.modelType == ComputeServer) {
+				seedComputeServerUpdateDefinitions(resourceId.toString().toLong())
+			}
+
 			return ServiceResponse.success()
 		} catch (Exception e) {
 			return ServiceResponse.error("Failed to add system component '${componentType.code}': ${e.message}")
@@ -235,6 +242,46 @@ class DummySystemProvider implements SystemProvider, ClusterProvider.ClusterUpda
 		return ServiceResponse.success()
 	}
 
+	// -- ComputeUpdateFacet implementation --
+
+	@Override
+	ServiceResponse<UpdateOperation> validateUpdate(UpdateDefinition update, ComputeServer... computeServer) {
+		log.info("validateUpdate called for compute server ${computeServer?.collect { it.id }} with update ${update.code}")
+		return ServiceResponse.success()
+	}
+
+	@Override
+	ServiceResponse<UpdateOperation> executeUpdate(UpdateDefinition update, ComputeServer... computeServer) {
+		log.info("executeUpdate called for compute server ${computeServer?.collect { it.id }} with update ${update.code}")
+		computeServer?.each { server ->
+			def fullServer = morpheusContext.services.computeServer.get(server.id)
+			if (fullServer) {
+				fullServer.name = "${update.name ?: 'Updated'} - ${server.id}"
+				morpheusContext.services.computeServer.save(fullServer)
+				log.info("Renamed compute server ${server.id} to '${fullServer.name}'")
+			}
+		}
+		return ServiceResponse.success()
+	}
+
+	@Override
+	ServiceResponse<UpdateOperation> refreshUpdate(UpdateOperation updateOperation, ComputeServer... computeServer) {
+		log.info("refreshUpdate called for compute server ${computeServer?.collect { it.id }}")
+		return ServiceResponse.success()
+	}
+
+	@Override
+	ServiceResponse<UpdateOperation> postUpdate(UpdateDefinition update, ComputeServer... computeServer) {
+		log.info("postUpdate called for compute server ${computeServer?.collect { it.id }} with update ${update.code}")
+		return ServiceResponse.success()
+	}
+
+	@Override
+	ServiceResponse<UpdateOperation> rollbackUpdate(UpdateDefinition update, ComputeServer... computeServer) {
+		log.info("rollbackUpdate called for compute server ${computeServer?.collect { it.id }} with update ${update.code}")
+		return ServiceResponse.success()
+	}
+
 	/**
 	 * Seeds UpdateDefinition records for cluster types by code so the system-scoped
 	 * cluster update endpoints can resolve available updates without hardcoded ids.
@@ -274,6 +321,45 @@ class DummySystemProvider implements SystemProvider, ClusterProvider.ClusterUpda
 					updateReleaseDate: new Date()
 				))
 			}
+		}
+	}
+
+	/**
+	 * Seeds an UpdateDefinition for the linked compute server's ComputeServerType
+	 * so that system-scoped server update endpoints can resolve available updates.
+	 */
+	private void seedComputeServerUpdateDefinitions(Long serverId) {
+		def server = morpheusContext.services.computeServer.get(serverId)
+		if (!server?.computeServerType?.id) {
+			log.warn("seedComputeServerUpdateDefinitions: server ${serverId} has no computeServerType, skipping")
+			return
+		}
+
+		Long typeId = server.computeServerType.id
+		String typeCode = server.computeServerType.code ?: "type-${typeId}"
+		String defCode = "omega.compute.update.patch.${typeCode}"
+
+		def existing = morpheusContext.services.updateDefinition.find(new DataQuery().withFilter('code', defCode))
+		if (existing) {
+			def needsSave = false
+			if (existing.refId != typeId) { existing.refId = typeId; needsSave = true }
+			if (existing.enabled != true) { existing.enabled = true; needsSave = true }
+			if (needsSave) morpheusContext.services.updateDefinition.save(existing)
+		} else {
+			morpheusContext.services.updateDefinition.create(new UpdateDefinition(
+				code: defCode,
+				name: "Omega Compute Demo Update (${typeCode})",
+				version: '1.0.1',
+				refType: 'ComputeServerType',
+				refId: typeId,
+				isPlugin: true,
+				enabled: true,
+				supportsRollback: false,
+				requiresReboot: false,
+				requiresRestart: false,
+				requiresMaintenanceMode: false,
+				updateReleaseDate: new Date()
+			))
 		}
 	}
 
